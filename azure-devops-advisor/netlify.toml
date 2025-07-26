@@ -1,0 +1,12 @@
+[build]
+  command = "pip install -r requirements.txt && cd frontend && npm install && npm run build"
+  publish = "frontend/build"
+
+[build.environment]
+  PYTHON_VERSION = "3.9.0"
+  NODE_VERSION = "16.x"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
