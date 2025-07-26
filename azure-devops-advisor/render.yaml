@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: azure-devops-advisor
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn backend.app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: FLASK_APP
+        value: backend/app.py
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: AZURE_DEVOPS_ORG
+        sync: false
+      - key: AZURE_DEVOPS_PAT
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
