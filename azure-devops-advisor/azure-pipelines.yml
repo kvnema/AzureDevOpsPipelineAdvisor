@@ -1,0 +1,128 @@
+trigger:
+  - main
+
+variables:
+  pythonVersion: '3.9'
+  webAppName: 'azure-devops-advisor-$(Build.BuildId)'
+  resourceGroup: 'azure-devops-advisor-rg'
+  vmImageName: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: 'Build'
+    displayName: 'Build and Test'
+    pool:
+      vmImage: $(vmImageName)
+    
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+      displayName: 'Use Python $(pythonVersion)'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+      displayName: 'Install Python dependencies'
+
+    - script: |
+        cd frontend
+        npm ci
+        npm run build
+      displayName: 'Install and build frontend'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.SourcesDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+      displayName: 'Publish build artifacts'
+
+- stage: Deploy
+  displayName: 'Deploy to Azure'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: Deploy
+    displayName: 'Deploy to Azure App Service'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download build artifacts'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'drop'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure Web App'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              appType: 'webAppLinux'
+              appName: '$(webAppName)'
+              package: '$(System.ArtifactsDirectory)/drop/backend'
+              runtimeStack: 'PYTHON|$(pythonVersion)'
+              startUpCommand: 'gunicorn --bind=0.0.0.0 --workers=4 --worker-class=uvicorn.workers.UvicornWorker app:app'
+
+          - task: AzureAppServiceSettings@1
+            displayName: 'Configure App Settings'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              appName: '$(webAppName)'
+              resourceGroupName: '$(resourceGroup)'
+              appSettings: |
+                [
+                  {
+                    "name": "AZURE_DEVOPS_ORG",
+                    "value": "$(AZURE_DEVOPS_ORG)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "AZURE_DEVOPS_PAT",
+                    "value": "$(AZURE_DEVOPS_PAT)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "FLASK_ENV",
+                    "value": "production",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "SECRET_KEY",
+                    "value": "$(SECRET_KEY)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "ADMIN_PASSWORD",
+                    "value": "$(ADMIN_PASSWORD)",
+                    "slotSetting": false
+                  }
+                ]
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Swap Slots'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              Action: 'Swap Slots'
+              WebAppName: '$(webAppName)'
+              ResourceGroupName: '$(resourceGroup)'
+              SourceSlot: 'staging'
+
+# Uncomment and configure these variables in your Azure DevOps pipeline settings
+# variables:
+#   - name: azureServiceConnection
+#     value: 'your-azure-service-connection'
+#   - name: AZURE_DEVOPS_ORG
+#     value: 'your-org-name'
+#   - name: AZURE_DEVOPS_PAT
+#     value: $(AZURE_DEVOPS_PAT)  # Create this as a secret variable
+#   - name: SECRET_KEY
+#     value: $(SECRET_KEY)  # Create this as a secret variable
+#   - name: ADMIN_PASSWORD
+#     value: $(ADMIN_PASSWORD)  # Create this as a secret variable
