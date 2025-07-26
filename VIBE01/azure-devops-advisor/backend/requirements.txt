@@ -1,0 +1,6 @@
+﻿Flask==2.3.3
+Flask-Cors==4.0.0
+Flask-HTTPAuth==4.8.0
+PyYAML==6.0.1
+Werkzeug==2.3.7
+python-dotenv==1.0.0
